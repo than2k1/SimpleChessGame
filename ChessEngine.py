@@ -7,6 +7,8 @@ A1 = (7,0)
 A8 = (7,7)
 H1 = (0,0)
 H8 = (0,7)
+E8 = (0,5)
+E1 = (7,5)
 class Player:
     def __init__(self, isWhite = True):
         self.isWhite = isWhite
@@ -29,8 +31,8 @@ class Player:
                 # 'k' : [(0,4)],
                 # 'p' : [(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7)]
             }
-        self.canCastle = (True, True)
-        self.enpassant = []#enpassant square (pawn get 2 move ahead)
+        self.canCastle = [(True, True)]
+        self.enpassant = ()#enpassant square (pawn get 2 move ahead)
         self.bitboard = ''
         self.inCheck = False
         self.pins = []
@@ -94,30 +96,134 @@ class ChessEngine:
     def makeMove(self, move):
         #take piece from start position to end position
         player = self.white if self.whiteToMove else self.black
-        if move.capturedPiece != "__":
-            opponent = self.black if self.whiteToMove else self.white
+        opponent = self.black if self.whiteToMove else self.white
+        if move.capturedPiece != "__" and not move.isEnpassant:
             captured = move.capturedPiece[1].lower()
             opponent.deletePiece(captured, move.end)
         moved = move.movedPiece[1].lower()
         player.updatePosition(moved, move.start, move.end)
         self.board[move.end[0], move.end[1]] = move.movedPiece
         self.board[move.start[0], move.start[1]] = "__"
+        if move.isPromotion:
+            self.board[move.end[0]][move.end[1]] = move.movedPiece[0]+'Q'
+            player.addPiece('q',move.end)
+        
+        if move.isEnpassant:
+            print(move.start[0],move.end[1])
+            self.board[move.start[0]][move.end[1]] = "__"
+            move.capturedPiece = self.board[move.start[0]][move.end[1]]
+            opponent.deletePiece('p', (move.start[0],move.end[1]))
+
+        if move.movedPiece[1] == 'p' and abs(move.end[0]-move.start[0]) == 2:
+            player.enpassant = (abs(move.end[0]+move.start[0])//2 , move.end[1])
+
+        else:
+            player.enpassant = ()
+        
+        if move.isCastle:
+            if move.end[1] - move.start[1] < 0: #queen side
+                rookNewPos = (move.end[0], move.end[1]+1)
+                rookCurPos = (move.end[0], move.end[1]-2)
+                player.updatePosition('r', rookCurPos, rookNewPos)
+                self.board[rookNewPos[0]][rookNewPos[1]] = self.board[rookCurPos[0]][rookCurPos[1]]
+                self.board[rookCurPos[0]][rookCurPos[1]] = "__"
+                pass
+            else: #king side
+                rookNewPos = (move.end[0], move.end[1]-1)
+                rookCurPos = (move.end[0], move.end[1]+1)
+                player.updatePosition('r', rookCurPos, rookNewPos)
+                self.board[rookNewPos[0]][rookNewPos[1]] = self.board[rookCurPos[0]][rookCurPos[1]]
+                self.board[rookCurPos[0]][rookCurPos[1]] = "__"
+                pass
+
+        self.updateCastlingRight(move)
         self.log.append(move)
         self.whiteToMove = not self.whiteToMove
+        print(self.white.canCastle)
+        print(self.black.canCastle)
+
+    def updateCastlingRight(self, move):
+        if move.movedPiece == 'wK':
+            self.white.canCastle.append((False, False))
+        elif move.movedPiece == 'bK':
+            self.black.canCastle.append((False, False))
+        elif move.movedPiece == 'wR':
+            if move.start == A1:
+                self.white.canCastle.append((False, True))
+            elif move.start == A8:
+                self.white.canCastle.append((True, False))
+            else:
+                self.white.canCastle.append((False, False))
+        elif move.movedPiece == 'bR':
+            if move.start == H1:
+                self.black.canCastle.append((False, True))
+            elif move.start == H8:
+                self.black.canCastle.append((True, False))
+            else:
+                self.black.canCastle.append((False, False))
+        elif move.capturedPiece == 'wR':
+            if move.end == A1:
+                self.white.canCastle.append((False, True))
+            elif move.end == A8:
+                self.white.canCastle.append((True, False))
+            else:
+                self.white.canCastle.append((False, False))
+        elif move.capturedPiece == 'bR':
+            if move.end == H1:
+                self.black.canCastle.append((False, True))
+            elif move.end == H8:
+                self.black.canCastle.append((True, False))
+            else:
+                self.black.canCastle.append((False, False))
+        else:
+            if self.whiteToMove:
+                self.white.canCastle.append(self.white.canCastle[-1])
+            else:
+                self.black.canCastle.append(self.black.canCastle[-1])
 
     def undoMove(self):
         if len(self.log) == 0:
             return
         lastMove = self.log.pop()
         opponent = self.black if self.whiteToMove else self.white
-        if lastMove.capturedPiece != "__":
-            player = self.white if self.whiteToMove else self.black
+        player = self.white if self.whiteToMove else self.black
+        if lastMove.capturedPiece != "__" and not lastMove.isEnpassant:
             captured = lastMove.capturedPiece[1].lower()
             player.addPiece(captured, lastMove.end)
         moved = lastMove.movedPiece[1].lower()
         opponent.updatePosition(moved, lastMove.end, lastMove.start)
         self.board[lastMove.start[0], lastMove.start[1]] = lastMove.movedPiece
         self.board[lastMove.end[0], lastMove.end[1]] = lastMove.capturedPiece
+        if lastMove.isPromotion:
+            player.deletePiece('q', lastMove.end)
+        
+        if lastMove.isEnpassant:
+            self.board[lastMove.end[0]][ lastMove.end[1]] = '__'
+            self.board[lastMove.start[0]][lastMove.end[1]] = ('w' if self.whiteToMove else 'b') + 'p'
+            player.addPiece('p',(lastMove.start[0],lastMove.end[1]) )
+            opponent.enpassant = lastMove.end
+        
+        if lastMove.movedPiece[1] == 'p' and abs(lastMove.end[1]-lastMove.start[1]) == 2:
+            opponent.enpassant = ()
+        
+        if lastMove.isCastle:
+            if lastMove.end[1] - lastMove.start[1] > 0: #King side
+                rookCurPos = (lastMove.end[0], lastMove.end[1] - 1)
+                rookNewPos = (lastMove.end[0], lastMove.end[1] + 1)
+                opponent.updatePosition('r', rookCurPos, rookNewPos)
+                self.board[rookNewPos[0]][rookNewPos[1]] = self.board[rookCurPos[0]][rookCurPos[1]]
+                self.board[rookCurPos[0]][rookCurPos[1]] = "__"
+            else:   #queen side
+                rookCurPos =(lastMove.end[0], lastMove.end[1] + 1)
+                rookNewPos = (lastMove.end[0], lastMove.end[1] - 2)
+                opponent.updatePosition('r', rookCurPos, rookNewPos)
+                self.board[rookNewPos[0]][rookNewPos[1]] = self.board[rookCurPos[0]][rookCurPos[1]]
+                self.board[rookCurPos[0]][rookCurPos[1]] = "__"
+
+        opponent.canCastle.pop()
+        
+        print(self.white.canCastle)
+        print(self.black.canCastle)
         self.whiteToMove = not self.whiteToMove
 
     def getAllMove(self):
@@ -151,7 +257,6 @@ class ChessEngine:
         moves = []
         player = self.white if self.whiteToMove else self.black
         player.inCheck, player.pins, player.checks = self.checkPinAndCheck()
-        print(player.inCheck, player.pins, player.checks)
         king = player.piece['k'][0]
         if player.inCheck:
             moves = self.getAllMove()
@@ -205,8 +310,47 @@ class ChessEngine:
                 if not inCheck:
                     moveList.append(Move((r,c), (row,col), self.board))
                 player.updatePosition("K", (row,col), (r,c))
+        moveList += self.getCastleMove(r, c)
         return moveList
 
+
+    def getCastleMove(self, r, c):
+        moveList = []
+        player = self.white if self.whiteToMove else self.black
+        if player.canCastle[-1][0]:
+            move = self.getQueenSideCastle(r,c)
+            if move is not None:
+                moveList.append(move)
+        if player.canCastle[-1][1]:
+            move = self.getKingSideCastle(r,c)
+            if move is not None:
+                moveList.append(move)
+        return moveList
+    
+    def getQueenSideCastle(self, r, c):
+        player = self.white if self.whiteToMove else self.black
+        if self.board[r][c-1] == "__" and self.board[r][c-2] == "__" and self.board[r][c-3] == "__":
+            kingPos = (r, c-2)
+            player.updatePosition('k', (r,c), kingPos)
+            inCheck, _, _ = self.checkPinAndCheck()
+            player.updatePosition('k', kingPos, (r,c))
+            if inCheck:
+                return None
+            else:
+                return Move((r,c), kingPos, self.board, castle=True)
+        
+    
+    def getKingSideCastle(self, r, c):
+        player = self.white if self.whiteToMove else self.black
+        if self.board[r][c+1] == "__" and self.board[r][c+2] == "__" :
+            kingPos = (r, c+2)
+            player.updatePosition('k', (r,c), kingPos)
+            inCheck, _, _ = self.checkPinAndCheck()
+            player.updatePosition('k', kingPos, (r,c))
+            if inCheck:
+                return None
+            else:
+                return Move((r,c), kingPos, self.board, castle=True)
 
 
     def getPawnMove(self, r, c ):
@@ -214,6 +358,7 @@ class ChessEngine:
         isPined = False
         pinDir = ()
         player = self.white if self.whiteToMove else self.black
+        opponent = self.black if self.whiteToMove else self.white
         for i in range(len(player.pins)-1, -1, -1):
             if player.pins[i][0] == r and player.pins[i][1] == c:
                 isPined = True
@@ -226,35 +371,51 @@ class ChessEngine:
                 if self.board[r-1][c] == "__": #the front is empty
                     if not isPined or pinDir == (-1,0):
                         moveList.append(Move((r,c), (r-1, c), self.board))
-                        if self.board[r-2][c] == "__" and r == 6:
+                        if r == 6 and self.board[r-2][c] == "__" :
                             moveList.append(Move((r,c), (r-2, c), self.board))
+                            
         else:
             if (r+1<SIZE):
                 if not isPined or pinDir == (1,0):
                     if self.board[r+1][c] == "__": #the front is empty
                         moveList.append(Move((r,c), (r+1, c), self.board))
-                        if self.board[r+2][c] == "__" and r == 1:
+                        if  r == 1 and self.board[r+2][c] == "__" :
                             moveList.append(Move((r,c), (r+2, c), self.board))
         #capture move
         if self.whiteToMove:
-            if (c-1 >= 0):
+            if (c-1 >= 0 and r-1>=0):
                 if not isPined or pinDir == (-1,-1):
                     if self.board[r-1][c-1][0] ==  "b": 
                         moveList.append(Move((r,c), (r-1, c-1), self.board))
-            if (c+1<SIZE) :
+                    elif (r-1,c-1) == opponent.enpassant:
+                        moveList.append(Move((r,c), (r-1, c-1), self.board, enpassant = True))
+                        print(1)
+                        
+            if (c+1<SIZE and r-1>=0) :
                 if not isPined or pinDir == (-1,1):
                     if self.board[r-1][c+1][0] == "b": 
                         moveList.append(Move((r,c), (r-1, c+1), self.board))
+                    elif (r-1,c+1) == opponent.enpassant:
+                        moveList.append(Move((r,c), (r-1, c+1), self.board, enpassant = True))
+                        print(2)
         
         else:
-            if (c-1 >= 0):
+            if (c-1 >= 0 and r+1<SIZE):
                 if not isPined or pinDir == (1,-1):
                     if self.board[r+1][c-1][0] ==  "w": 
                         moveList.append(Move((r,c), (r+1, c-1), self.board))
-            if (c+1<SIZE) :
+                    elif (r+1,c-1) == opponent.enpassant:
+                        moveList.append(Move((r,c), (r+1, c-1), self.board, enpassant = True))
+                        print(3)
+
+            if (c+1<SIZE and r+1<SIZE) :
                 if not isPined or pinDir == (1,1):
                     if self.board[r+1][c+1][0] == "w": 
                         moveList.append(Move((r,c), (r+1, c+1), self.board))
+                    elif (r+1,c+1) == opponent.enpassant:
+                        moveList.append(Move((r,c), (r+1, c+1), self.board, enpassant = True))
+                        print(4)
+
         return moveList
 
     def getMultiMove(self, r, c):
@@ -273,9 +434,6 @@ class ChessEngine:
                 break
         if isPined:
             direction = [pinDir,(-pinDir[0], -pinDir[1])]
-            print("______________")
-            print(direction)
-            print("______________")
         else:
             direction = self.directions[piece.upper()]
         
@@ -394,13 +552,17 @@ class Move:
     ColToFile = {v:k for k,v in FileToCol.items()}
 
 
-    def __init__(self, first, second, board, flag = None):
+    def __init__(self, first, second, board, enpassant = False, castle = False):
         self.start = first
         self.end = second
         self.movedPiece = board[self.start[0], self.start[1]]
         self.capturedPiece = board[self.end[0], self.end[1]]
         self.moveID = self.start[0] * 1000 + self.start[1]*100 + self.end[0] * 10 + self.end[1]
-        self.flag = flag
+        
+        self.isPromotion = (self.movedPiece == 'wp' and self.end[0] == 0) or (self.movedPiece == 'bp' and self.end[0] == 7)
+        self.isEnpassant = enpassant
+        self.isCastle = castle
+
     def getChessNotation(self):
         return (self.movedPiece[1] if self.movedPiece[1] != "p" and self.movedPiece != "__"  else "")+ self.getRankFile(self.start[0], self.start[1]) + " " + self.getRankFile(self.end[0], self.end[1])
 
