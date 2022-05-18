@@ -92,6 +92,8 @@ class ChessEngine:
                         self.black.piece[p].append((r,c))
                     else:
                         self.black.piece[p] = [(r,c)]
+        self.checkmate = False
+        self.stalemate = False
 
     def makeMove(self, move):
         #take piece from start position to end position
@@ -109,7 +111,7 @@ class ChessEngine:
             player.addPiece('q',move.end)
         
         if move.isEnpassant:
-            print(move.start[0],move.end[1])
+            # print(move.start[0],move.end[1])
             self.board[move.start[0]][move.end[1]] = "__"
             move.capturedPiece = self.board[move.start[0]][move.end[1]]
             opponent.deletePiece('p', (move.start[0],move.end[1]))
@@ -138,48 +140,57 @@ class ChessEngine:
 
         self.updateCastlingRight(move)
         self.log.append(move)
+        # print("__________")
+        # print(self.black.canCastle)
+        # print(self.white.canCastle)
+        # if abs(len(self.black.canCastle) - len(self.white.canCastle)) >= 2:
+        #     print(move.start, move.end, self.whiteToMove)
+        # print("__________")
         self.whiteToMove = not self.whiteToMove
-        print(self.white.canCastle)
-        print(self.black.canCastle)
+        
 
     def updateCastlingRight(self, move):
+        if move.isCastle:
+            if self.whiteToMove:
+                    self.white.canCastle.append((False, False))
+                    return
+            else:
+                    self.black.canCastle.append((False, False))
+                    return
+
         if move.movedPiece == 'wK':
             self.white.canCastle.append((False, False))
         elif move.movedPiece == 'bK':
             self.black.canCastle.append((False, False))
         elif move.movedPiece == 'wR':
             if move.start == A1:
-                self.white.canCastle.append((False, True))
+                self.white.canCastle.append((False, self.white.canCastle[-1][1]))
             elif move.start == A8:
-                self.white.canCastle.append((True, False))
-            else:
-                self.white.canCastle.append((False, False))
+                self.white.canCastle.append((self.white.canCastle[-1][0], False))
         elif move.movedPiece == 'bR':
             if move.start == H1:
-                self.black.canCastle.append((False, True))
+                self.black.canCastle.append((False, self.black.canCastle[-1][1]))
             elif move.start == H8:
-                self.black.canCastle.append((True, False))
-            else:
-                self.black.canCastle.append((False, False))
+                self.black.canCastle.append((self.black.canCastle[-1][0], False))
+
         elif move.capturedPiece == 'wR':
             if move.end == A1:
-                self.white.canCastle.append((False, True))
+                self.white.canCastle.append((False, self.white.canCastle[-1][1]))
             elif move.end == A8:
-                self.white.canCastle.append((True, False))
-            else:
-                self.white.canCastle.append((False, False))
+                self.white.canCastle.append((self.white.canCastle[-1][0], False))
+
         elif move.capturedPiece == 'bR':
             if move.end == H1:
-                self.black.canCastle.append((False, True))
+                self.black.canCastle.append((False, self.black.canCastle[-1][1]))
             elif move.end == H8:
-                self.black.canCastle.append((True, False))
-            else:
-                self.black.canCastle.append((False, False))
+                self.black.canCastle.append((self.black.canCastle[-1][0], False))
+
         else:
             if self.whiteToMove:
-                self.white.canCastle.append(self.white.canCastle[-1])
+                 self.white.canCastle.append(self.white.canCastle[-1])
             else:
-                self.black.canCastle.append(self.black.canCastle[-1])
+                self.black.canCastle.append(self.white.canCastle[-1])
+                
 
     def undoMove(self):
         if len(self.log) == 0:
@@ -220,10 +231,17 @@ class ChessEngine:
                 self.board[rookNewPos[0]][rookNewPos[1]] = self.board[rookCurPos[0]][rookCurPos[1]]
                 self.board[rookCurPos[0]][rookCurPos[1]] = "__"
 
-        opponent.canCastle.pop()
+        if len(opponent.canCastle) > 1:    
+            opponent.canCastle.pop()
         
-        print(self.white.canCastle)
-        print(self.black.canCastle)
+        self.checkmate = False
+        self.stalemate = False
+        # print("__________")
+        # print(self.black.canCastle)
+        # print(self.white.canCastle)
+        # if abs(len(self.black.canCastle) - len(self.white.canCastle)) >= 2:
+        #     print(lastMove.start, lastMove.end, self.whiteToMove)
+        # print("__________")
         self.whiteToMove = not self.whiteToMove
 
     def getAllMove(self):
@@ -288,12 +306,12 @@ class ChessEngine:
             moves = self.getAllMove()
         # for move in moves:
         #     print(move.start, move.end)
-        print("_______________")
+        # print("_______________")
         if len(moves) == 0:
             if player.inCheck == True:
-                print("checkmate")
+                self.checkmate = True
             else:
-                print("draw")
+                self.stalemate = True
         return moves
 
     def getKingMoves(self, r, c):
@@ -329,7 +347,7 @@ class ChessEngine:
     
     def getQueenSideCastle(self, r, c):
         player = self.white if self.whiteToMove else self.black
-        if self.board[r][c-1] == "__" and self.board[r][c-2] == "__" and self.board[r][c-3] == "__":
+        if c-3 >= 0 and self.board[r][c-1] == "__" and self.board[r][c-2] == "__" and self.board[r][c-3] == "__":
             kingPos = (r, c-2)
             player.updatePosition('k', (r,c), kingPos)
             inCheck, _, _ = self.checkPinAndCheck()
@@ -342,7 +360,7 @@ class ChessEngine:
     
     def getKingSideCastle(self, r, c):
         player = self.white if self.whiteToMove else self.black
-        if self.board[r][c+1] == "__" and self.board[r][c+2] == "__" :
+        if c+2 <SIZE and self.board[r][c+1] == "__" and self.board[r][c+2] == "__" :
             kingPos = (r, c+2)
             player.updatePosition('k', (r,c), kingPos)
             inCheck, _, _ = self.checkPinAndCheck()
@@ -389,7 +407,7 @@ class ChessEngine:
                         moveList.append(Move((r,c), (r-1, c-1), self.board))
                     elif (r-1,c-1) == opponent.enpassant:
                         moveList.append(Move((r,c), (r-1, c-1), self.board, enpassant = True))
-                        print(1)
+                        # print(1)
                         
             if (c+1<SIZE and r-1>=0) :
                 if not isPined or pinDir == (-1,1):
@@ -397,7 +415,7 @@ class ChessEngine:
                         moveList.append(Move((r,c), (r-1, c+1), self.board))
                     elif (r-1,c+1) == opponent.enpassant:
                         moveList.append(Move((r,c), (r-1, c+1), self.board, enpassant = True))
-                        print(2)
+                        # print(2)
         
         else:
             if (c-1 >= 0 and r+1<SIZE):
@@ -406,7 +424,7 @@ class ChessEngine:
                         moveList.append(Move((r,c), (r+1, c-1), self.board))
                     elif (r+1,c-1) == opponent.enpassant:
                         moveList.append(Move((r,c), (r+1, c-1), self.board, enpassant = True))
-                        print(3)
+                        # print(3)
 
             if (c+1<SIZE and r+1<SIZE) :
                 if not isPined or pinDir == (1,1):
@@ -414,7 +432,7 @@ class ChessEngine:
                         moveList.append(Move((r,c), (r+1, c+1), self.board))
                     elif (r+1,c+1) == opponent.enpassant:
                         moveList.append(Move((r,c), (r+1, c+1), self.board, enpassant = True))
-                        print(4)
+                        # print(4)
 
         return moveList
 
@@ -478,7 +496,10 @@ class ChessEngine:
         oppColor = 'b' if self.whiteToMove else 'w'
         direction = self.directions['Q'] #get diagonal and straight direction for slider piece
         player = self.white if self.whiteToMove else self.black
-        startRow, startCol = player.piece['k'][0][0], player.piece['k'][0][1] #row and col of king
+        try:
+            startRow, startCol = player.piece['k'][0][0], player.piece['k'][0][1] #row and col of king
+        except :
+            print(player.piece['k'])
         for dir in direction:
             possiblePin = ()
             for i in range(1,SIZE):

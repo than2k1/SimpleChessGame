@@ -2,8 +2,8 @@
 
 import pygame as pg
 from ChessEngine import *
-import RandomMove
-
+import MoveFinder
+import time
 DIMENSION = 8
 SIZE = 512
 WINDOW_SIZE = 800
@@ -34,7 +34,6 @@ def main():
     player2 = False #if human play black
     while running:
         humanTurn = (gs.whiteToMove and player1) or (not gs.whiteToMove and player2)
-
         for e in pg.event.get():
             if e.type == pg.QUIT:
                 running = False
@@ -74,16 +73,22 @@ def main():
                 if e.key == pg.K_BACKSPACE:
                     print("backspace pressed")
                     gs.undoMove()
+                    gs.undoMove()
                     moveMade = True
                     selected = ()
                     playerClick = []
 
         #AI here
         if not gameOver and not humanTurn:
-            AIMove = RandomMove.findRandomMove(validMove)
-            gs.makeMove(AIMove)
-            moveMade = True
-
+            if gs.whiteToMove:
+                AIMove = MoveFinder.findBestMove(gs, validMove)
+                gs.makeMove(AIMove)
+                moveMade = True
+            else:
+                AIMove = MoveFinder.findRandomMove(validMove)
+                gs.makeMove(AIMove)
+                moveMade = True
+                time.sleep(0.5)
         if moveMade:
             validMove = gs.getValidMove()
             if len(validMove) == 0:
